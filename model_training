@@ -1,0 +1,51 @@
+import pandas as pd
+import numpy as np
+
+# Load all 4 parts of the dataset
+df1 = pd.read_csv("UNSW-NB15_1.csv")
+df2 = pd.read_csv("UNSW-NB15_2.csv")
+df3 = pd.read_csv("UNSW-NB15_3.csv")
+df4 = pd.read_csv("UNSW-NB15_4.csv")
+
+#concat into one dataframe
+df = pd.concat([df1, df2, df3, df4], ignore_index=True)
+
+# Encode categorical columns to numberical
+for col in ['proto', 'service', 'state']:
+    if col in df.columns:
+        df[col] = df[col].astype('category').cat.codes
+columns_to_drop = ['scrip', 'sport', 'dstrip', 'dsport','stime', 'ltime']
+for col in columns_to_drop:
+  if col in df.columns:
+    df.drop(columns=[col], inplace=True)
+
+
+#Replace inf and NaN with safe values to avoid empty rows and cols
+df.replace([np.inf, -np.inf], np.nan, inplace=True)
+df.fillna(0, inplace=True)
+
+#Confirm shape (should be > 0 rows)
+print("Final cleaned shape:", df.shape)
+df.head()
+
+df_numeric = df.select_dtypes(include=['number'])
+df_numeric.to_csv('valid_sample.csv', index = False, header = False, encoding ='utf-8')
+print("Shape of numeric-only data:", df_numeric.shape)
+
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import MinMaxScaler
+
+#scale features
+scaler = MinMaxScaler()
+X_scaled = scaler.fit_transform(df_numeric)
+
+#Training Isolation Forest
+model = IsolationForest(n_estimators = 100, contamination = 0.05, random_state = 42)
+model.fit(X_scaled)
+
+df['anomaly'] = model.predict(X_scaled)
+
+anomalies = df[df['anomaly'] == -1]
+print(("Detected Anomalies : ", len(anomalies)))
+anomalies.head()
+
